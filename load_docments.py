@@ -7,8 +7,15 @@ from PIL import Image
 import pytesseract
 import chromadb
 from chromadb.utils import embedding_functions
+import platform
 
-
+def set_google_api_key():
+    api_key = "AIzaSyD7VrRJrSa3W7u0syiZpWldChRCTiWLp-4"
+    if platform.system() == "Windows":
+        os.environ["GOOGLE_API_KEY"] = api_key
+    else:  # Assuming macOS or Linux
+        os.environ["GOOGLE_API_KEY"] = api_key
+set_google_api_key()
 def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file."""
     text = ""
@@ -47,7 +54,7 @@ def extract_text_from_file(file_path):
     elif extension.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]:
         return extract_text_from_image(file_path)
     elif extension.lower() == ".txt":
-        with open(file_path, "r") as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             return file.read()
     else:
         print(f"Unsupported file type: {extension}")
