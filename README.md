@@ -8,7 +8,7 @@ This project is a submission for [HackRX](https://hackrx.in/) for the problem st
 
 ## Snapshots
 
-![Diagram](image_1.png)
+![Diagram](image_1.jpeg)
 
 ## Getting Started
 
