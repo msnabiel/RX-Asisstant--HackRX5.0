@@ -6,9 +6,18 @@ RX-Assistant is a chatbot application that can process and respond to user queri
 
 This project is a submission for [HackRX](https://hackrx.in/) for the problem statement **Context Aware Chatbot**.
 
+## Endpoint URL
+
+```bash
+http://localhost:3000/chat
+```
+
 ## Snapshots
 
 ![Diagram](image_1.jpeg)
+
+
+
 
 ## Getting Started
 
@@ -66,7 +75,7 @@ You can test the API using cURL:
 curl --location "localhost:3000/chat" --header "Content-Type: application/json" --header "x-user-id: 1234" --header "x-session-id: J5S7P1ZQ" --data "{\"query\":\"What is said about the pandemic?\"}"
 ```
 
-### RESPONSE
+### Response
 
 ```json
 {
