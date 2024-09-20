@@ -23,8 +23,6 @@ app = Flask(__name__)
 # Now you can retrieve the API key from the environment variable when needed
 google_api_key = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=google_api_key)
-# Initialize Flask app
-app = Flask(__name__)
 
 # Initialize history storage
 session_history: Dict[str, List[Dict[str, str]]] = {}
