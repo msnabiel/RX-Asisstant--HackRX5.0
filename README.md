@@ -12,10 +12,12 @@ This project is a submission for [HackRX](https://hackrx.in/) for the problem st
 http://localhost:3000/chat
 ```
 
+## Data Flow
+
+
 ## Snapshots
 
 ![Diagram](image_1.jpeg)
-
 
 
 
