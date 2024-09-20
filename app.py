@@ -67,7 +67,7 @@ def fetch_and_call_api(query):
         response_data = response.json()
     except Exception as e:
         # Handle exception and print a friendly message
-        return(f"Need API Key to call, to perform the action")
+        return(f"Need API Key to call, to perform the action. ")
 
     if response and response_data.get("status") == "success":
         return(response_data["message"])
