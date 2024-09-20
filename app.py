@@ -1,137 +1,174 @@
 import argparse
 import os
 from typing import List, Dict
-
+from flask import Flask, request, jsonify
+import requests
 import google.generativeai as genai
 import chromadb
 from chromadb.utils import embedding_functions
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from sentence_transformers import SentenceTransformer
+import platform
+
+def set_google_api_key():
+    api_key = "AIzaSyD7VrRJrSa3W7u0syiZpWldChRCTiWLp-4"
+    if platform.system() == "Windows":
+        os.environ["GOOGLE_API_KEY"] = api_key
+    else:  # Assuming macOS or Linux
+        os.environ["GOOGLE_API_KEY"] = api_key
+set_google_api_key()
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Now you can retrieve the API key from the environment variable when needed
+google_api_key = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=google_api_key)
+# Initialize Flask app
+app = Flask(__name__)
 
 # Initialize history storage
 session_history: Dict[str, List[Dict[str, str]]] = {}
 
 # Load Huggingface model for embeddings
-#tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-#embedding_model = AutoModelForSeq2SeqLM.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-
-# Check if the GOOGLE_API_KEY environment variable is set. Prompt the user to set it if not.
-google_api_key = None
-if "GOOGLE_API_KEY" not in os.environ:
-    google_api_key = input("Please enter your Google API Key: ")
-    genai.configure(api_key=google_api_key)
-else:
-    google_api_key = os.environ["GOOGLE_API_KEY"]
-    genai.configure(api_key=google_api_key)
+embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-1.5-flash")
 
+# Set Google API key
+google_api_key = "AIzaSyD7VrRJrSa3W7u0syiZpWldChRCTiWLp-4"
+genai.configure(api_key=google_api_key)
 
-def build_prompt(query: str, context: List[str], history: List[Dict[str, str]]) -> str:
-    """
-    Builds a prompt for the Gemini LLM with session history.
 
-    Args:
-    query (str): The user's original query.
-    context (List[str]): The context of the query, returned by embedding search.
-    history (List[Dict[str, str]]): Previous query-response pairs for the session.
-
-    Returns:
-    A prompt string for the LLM.
-    """
+def build_combined_prompt(query: str, context: List[str], history: List[Dict[str, str]]) -> str:
     base_prompt = (
-        "I am going to ask you a question, which I would like you to answer"
-        " based only on the provided context, and not any other information."
-        " If there is not enough information in the context to answer the question,"
-        ' say "I am not sure", then try to make a guess.'
-        " Break your answer up into nicely readable paragraphs."
+        """
+            I am going to ask you a question, which I would like you to answer strictly
+            based on the given rules. 
+            If the question or the intent involves any of the following actions, return the action name alone, you should not say anything else. your response must be only the action name phrase: 
+            action names : create_order, cancel_order, collect_payment, view_invoice.
+            Here are some examples:
+            1. 'Create an order to book a bike' , say "create_order"
+            2. 'Cancel my order', say"cancel_order"
+            3. 'I want to pay for my purchase', say "collect_payment"
+            4. 'Show me the invoice for order #123', say "view_invoice"
+            Else, If the question does not involves any of the following actions, you need answer strictly based on the given context
+            and If there is not enough information in the context to answer the question,
+            then try to make a guess, based on the context.
+            """
     )
-    user_prompt = f" The question is '{query}'. Here is all the context you have:" f'{(" ").join(context)}'
 
-    # Include session history
+    user_prompt = f" The question is '{query}'. Here is all the context you have: {' '.join(context)}"
     history_prompt = "\n".join([f"User: {item['query']}\nBot: {item['response']}" for item in history])
-
+    
     return f"{base_prompt} {history_prompt} {user_prompt}"
 
+def fetch_and_call_api(query):
+    response = None
+    response_data = {}  # Initialize response_data to an empty dictionary
+    
+    try:
+        # Replace with your actual API endpoint
+        response = requests.get("https://dummyapi.com/api", params={"query": query})
+        response_data = response.json()
+    except Exception as e:
+        # Handle exception and print a friendly message
+        return(f"Need API Key to call, to perform the action")
+
+    if response and response_data.get("status") == "success":
+        return(response_data["message"])
+
+def execute_action(action_name: str) -> str:
+    if action_name == "create_order":
+        fetch_response = fetch_and_call_api("YOUR_API_KEY")
+        return fetch_response + "Order created successfully."
+    elif action_name == "cancel_order":
+        fetch_response = fetch_and_call_api("YOUR_API_KEY")
+        return fetch_response + "Order created successfully."
+    elif action_name == "collect_payment":
+        fetch_response = fetch_and_call_api("YOUR_API_KEY")
+        return fetch_response + "Order created successfully."
+    elif action_name == "view_invoice":
+        fetch_response = fetch_and_call_api("YOUR_API_KEY")
+        return fetch_response + "Order created successfully."
+    else:
+        return "No action taken."
 
 def get_gemini_response(query: str, context: List[str], session_id: str) -> str:
-    """
-    Queries the Gemini API to get a response to the user's question, with session history.
-
-    Args:
-    query (str): The user's query.
-    context (List[str]): The context returned by the embedding search.
-    session_id (str): Unique session identifier.
-
-    Returns:
-    A response from the Gemini LLM.
-    """
     history = session_history.get(session_id, [])
 
-    # Build the prompt with context and history
-    prompt = build_prompt(query, context, history)
+    # Build the combined prompt
+    prompt = build_combined_prompt(query, context, history)
 
     # Get response from Gemini
     response = model.generate_content(prompt)
 
+    response_text = response.text.strip().lower()
+
+    # Check if Gemini returned an action instead of a regular answer
+    if response_text in ["create_order", "cancel_order", "collect_payment", "view_invoice"]:
+        action_response = execute_action(response_text)
+        
+        # Append the action execution to session history
+        session_history.setdefault(session_id, []).append({"query": query, "response": action_response})
+        return action_response
+
     # Save the query and response in session history
-    session_history[session_id].append({"query": query, "response": response.text})
+    session_history.setdefault(session_id, []).append({"query": query, "response": response.text})
 
     return response.text
 
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    user_id = request.headers.get('x-user-id')
+    session_id = request.headers.get('x-session-id')
+    query = data.get('query')
+
+    if not query:
+        return jsonify({"error": "Query is required."}), 400
+
+    try:
+        # Query the collection to get relevant documents from ChromaDB
+        context_results = collection.query(query_texts=[query], n_results=5, include=["documents", "metadatas"])
+
+        # Flatten the nested structure of documents
+        context = [doc for sublist in context_results["documents"] for doc in sublist]
+
+        # Get the response from Gemini
+        response = get_gemini_response(query, context, session_id)
+        
+        return jsonify({"bot_message": response})
+
+    except Exception as e:
+        # Log the error (you can also use a logging library for better error tracking)
+        print(f"Error occurred: {e}")
+        return jsonify({"error": "An internal error occurred. Please try again later."}), 500
+
+
 def main(collection_name: str = "documents_collection", persist_directory: str = ".") -> None:
-    # Instantiate a persistent chroma client
+    global collection  # Declare the collection variable to access it in the chat function
     client = chromadb.PersistentClient(path=persist_directory)
 
     # Create embedding function using Huggingface transformers
     embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        api_key="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"
+        api_key="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"  # Ensure you set this environment variable
     )
 
     # Get the collection
     collection = client.get_collection(name=collection_name, embedding_function=embedding_function)
 
-    # Simple input loop
-    while True:
-        # Get session ID and query from user input
-        session_id = input("Session ID: ")
-        if session_id not in session_history:
-            session_history[session_id] = []
-
-        query = input("Query: ")
-        if len(query) == 0:
-            print("Please enter a question. Ctrl+C to quit.\n")
-            continue
-
-        print("\nThinking...\n")
-
-        # Query the collection to get the 5 most relevant results
-        results = collection.query(query_texts=[query], n_results=5, include=["documents", "metadatas"])
-
-        sources = "\n".join(
-            [
-                f"{result['filename']}: line {result['line_number']}"
-                for result in results["metadatas"][0]  # type: ignore
-            ]
-        )
-
-        # Get the response from Gemini
-        response = get_gemini_response(query, results["documents"][0], session_id)  # type: ignore
-
-        # Output the response with sources
-        print(f"Response: {response}\n")
-        print(f"Source documents:\n{sources}\n")
+    # Start Flask app
+    app.run(port=3000)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load documents from a directory into a Chroma collection")
-
     parser.add_argument("--persist_directory", type=str, default="chroma_storage", help="Directory to store the Chroma collection")
     parser.add_argument("--collection_name", type=str, default="documents_collection", help="Name of the Chroma collection")
 
-    # Parse arguments
     args = parser.parse_args()
 
     main(collection_name=args.collection_name, persist_directory=args.persist_directory)
