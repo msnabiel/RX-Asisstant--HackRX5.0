@@ -74,7 +74,7 @@ The chat functionality can be accessed via the `/chat` endpoint. You can send a 
 You can test the API using cURL:
 
 ```bash
-curl --location "localhost:3000/chat" --header "Content-Type: application/json" --header "x-user-id: 1234" --header "x-session-id: J5S7P1ZQ" --data "{\"query\":\"What is said about the pandemic?\"}"
+curl --location "localhost:10000/chat" --header "Content-Type: application/json" --header "x-user-id: 1234" --header "x-session-id: J5S7P1ZQ" --data "{\"query\":\"What is said about the pandemic?\"}"
 ```
 
 ### Response
