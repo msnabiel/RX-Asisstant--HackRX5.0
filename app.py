@@ -33,10 +33,6 @@ embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Set Google API key
-google_api_key = "AIzaSyD7VrRJrSa3W7u0syiZpWldChRCTiWLp-4"
-genai.configure(api_key=google_api_key)
-
 
 def build_combined_prompt(query: str, context: List[str], history: List[Dict[str, str]]) -> str:
     base_prompt = (
