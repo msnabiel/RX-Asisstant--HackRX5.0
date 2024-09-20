@@ -9,7 +9,7 @@ This project is a submission for [HackRX](https://hackrx.in/) for the problem st
 ## Endpoint URL
 
 ```bash
-http://localhost:3000/chat
+http://localhost:10000/chat
 ```
 
 ## Data Flow
