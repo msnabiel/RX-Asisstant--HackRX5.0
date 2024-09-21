@@ -155,7 +155,7 @@ def main(collection_name: str = "documents_collection", persist_directory: str =
     collection = client.get_collection(name=collection_name, embedding_function=embedding_function)
 
     # Start Flask app
-    app.run(port=10000)
+    app.run(port=3000)
 
 
 if __name__ == "__main__":
