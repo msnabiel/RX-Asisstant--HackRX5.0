@@ -14,10 +14,8 @@ from flask_cors import CORS
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 import warnings
 from pinecone import Pinecone
-import os 
 from pinecone import ServerlessSpec
 import time
-from tqdm.auto import tqdm
 
 # Suppress specific warnings from Hugging Face transformers library
 warnings.filterwarnings("ignore", message="You are using the default legacy behaviour")
@@ -37,8 +35,8 @@ set_google_api_key()
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
-
-# Now you can retrieve the API key from the environment variable when needed
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# Retrieve the API key from the environment variable when needed
 google_api_key = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=google_api_key)
 
@@ -52,10 +50,9 @@ session_history: Dict[str, List[Dict[str, str]]] = {}
 # Load Huggingface model for embeddings
 embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-
 api_key = "7968bf7e-97f5-4022-adf7-9294590606be"
 
-# configure client
+# Configure Pinecone client
 pc = Pinecone(api_key=api_key)
 cloud = os.environ.get('PINECONE_CLOUD') or 'aws'
 region = os.environ.get('PINECONE_REGION') or 'us-east-1'
@@ -65,29 +62,25 @@ existing_indexes = [
     index_info["name"] for index_info in pc.list_indexes()
 ]
 
-# check if index already exists (it shouldn't if this is first time)
+# Check if index already exists (it shouldn't if this is the first time)
 if index_name not in existing_indexes:
-    # if does not exist, create index
+    # If does not exist, create index
     pc.create_index(
         index_name,
-        dimension=384,  # dimensionality of minilm
-        metric='cosine', #metric='dotproduct',
+        dimension=384,  # Dimensionality of minilm
+        metric='cosine',  # Use cosine similarity
         spec=spec
     )
-    # wait for index to be initialized
+    # Wait for index to be initialized
     while not pc.describe_index(index_name).status['ready']:
         time.sleep(1)
 
-# connect to index
+# Connect to index
 index = pc.Index(index_name)
 time.sleep(1)
-# view index stats
-index.describe_index_stats()
-
 
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-1.5-flash")
-
 
 # Helper functions to extract text from different document types
 def extract_text_from_pdf(pdf_path):
@@ -140,16 +133,16 @@ def fetch_and_call_api(query):
 def execute_action(action_name: str) -> str:
     if action_name == "create_order":
         fetch_response = fetch_and_call_api("YOUR_API_KEY")
-        return fetch_response + "Order created successfully."
+        return fetch_response + " Order created successfully."
     elif action_name == "cancel_order":
         fetch_response = fetch_and_call_api("YOUR_API_KEY")
-        return fetch_response + "Order cancelled successfully."
+        return fetch_response + " Order cancelled successfully."
     elif action_name == "collect_payment":
         fetch_response = fetch_and_call_api("YOUR_API_KEY")
-        return fetch_response + "Payment collected successfully."
+        return fetch_response + " Payment collected successfully."
     elif action_name == "view_invoice":
         fetch_response = fetch_and_call_api("YOUR_API_KEY")
-        return fetch_response + "Here is your invoice."
+        return fetch_response + " Here is your invoice."
     else:
         return "No action taken."
 
@@ -181,7 +174,6 @@ def classify_query_with_flan(query: str, actions_list: list = DEFAULT_ACTIONS_LI
             return action
     return "context_based"
 
-
 def build_combined_prompt(query: str, context: List[str], history: List[Dict[str, str]]) -> str:
     base_prompt = """
         I am going to ask you a question, which I would like you to answer strictly based on the given context.
@@ -194,8 +186,7 @@ def build_combined_prompt(query: str, context: List[str], history: List[Dict[str
 
     return f"{base_prompt} {history_prompt} {user_prompt}"
 
-
-def get_gemini_response(query: str, context: List[str], session_id: str) -> str:
+def get_gemini_response(query: str, context: List[str], session_id: str, document_id: str) -> str:
     history = session_history.get(session_id, [])
 
     # Classify the query using Flan-T5
@@ -219,8 +210,11 @@ def get_gemini_response(query: str, context: List[str], session_id: str) -> str:
     # Save the query and response in session history
     session_history.setdefault(session_id, []).append({"query": query, "response": response.text})
 
-    return response.text
+    # Add references to the response
+    references = "\n".join([f"From document '{document_id}': Line {i + 1}: {line}" 
+                            for i, line in enumerate(context)])
 
+    return f"{response.text}\n\nReferences:\n{references}"
 
 @app.route('/upload_document', methods=['POST'])
 def upload_document():
@@ -235,61 +229,60 @@ def upload_document():
     doc_name = document.filename
 
     # Validate document format
-    if not doc_name.endswith(('.pdf', '.ppt', '.docx', '.jpg', '.jpeg', '.png')):
-        return jsonify({"error": "Invalid document format. Only PDF, PPT, DOCX, and images are supported."}), 400
+    if not doc_name.endswith(('.pdf', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.bmp', '.tiff')):
+        return jsonify({"error": "Unsupported file format."}), 400
 
-    try:
-        # Save the uploaded file temporarily
-        upload_path = os.path.join(uploads_dir, doc_name)  # Save to uploads directory
-        document.save(upload_path)
+    # Save the document
+    file_path = os.path.join(uploads_dir, doc_name)
+    document.save(file_path)
 
-        # Extract text from the uploaded document
-        text = extract_text_from_file(upload_path)
-        if text is None:
-            return jsonify({"error": f"Unsupported document format or failed to extract text from {doc_name}."}), 400
+    # Extract text from the document
+    extracted_text = extract_text_from_file(file_path)
 
-        # Split text into lines for processing
-        lines = text.splitlines()
+    if extracted_text is None:
+        return jsonify({"error": "Unable to extract text from the document."}), 400
 
-        # Store extracted text into Pinecone with metadata
-        vectors = []
-        for i, line in enumerate(lines):
-            if line.strip():  # Only process non-empty lines
-                vector = embedding_model.encode(line).tolist()  # Create embedding vector
-                # Create ID and metadata pair for upserting
-                vectors.append((f"{doc_name}_{i}", vector, {"line": line}))  # Include metadata as a dictionary
+    # Create vectors and store in Pinecone
+    vectors = embedding_model.encode(extracted_text.splitlines()).tolist()
+    for i, line in enumerate(extracted_text.splitlines()):
+        index.upsert([(f"{doc_name}-{i}", vectors[i], {"line": line})])
 
-        # Upsert all vectors to Pinecone
-        index.upsert(vectors=vectors)
-
-        # Remove the uploaded file after processing
-        os.remove(upload_path)
-
-        return jsonify({"message": "Document uploaded and processed successfully."}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+    return jsonify({"message": "Document uploaded and processed successfully."}), 200
 
 @app.route('/chat', methods=['POST'])
 def query():
     data = request.get_json()
     query_text = data.get("query")
     session_id = data.get("session_id")
+    document_id = data.get("document_id")  # New parameter
 
     if not query_text or not session_id:
         return jsonify({"error": "Missing query or session ID."}), 400
 
     # Retrieve the Pinecone vectors to provide context
     query_vector = embedding_model.encode(query_text).tolist()
-    context_vectors = index.query(vector=query_vector, top_k=5, include_metadata=True)
 
-    # Extract context from the Pinecone query results
-    context = [match["metadata"].get("line", "No text available") for match in context_vectors["matches"]]
+    # Adjust query based on document_id
+    if document_id:  # If document_id is provided
+        # Query for lines associated with the specific document
+        context_vectors = index.query(vector=query_vector, top_k=5, include_metadata=True)
+        
+        # Filter context to include only lines from the specified document ID
+        context = [match["metadata"].get("line", "No text available") 
+                   for match in context_vectors["matches"] 
+                   if match["id"].startswith(document_id)]
+        if not context:
+            return jsonify({"error": "No relevant context found for the specified document."}), 404
+    else:  # No document_id provided
+        # Retrieve context from the entire index
+        context_vectors = index.query(vector=query_vector, top_k=5, include_metadata=True)
+        # Extract context lines without filtering by document ID
+        context = [match["metadata"].get("line", "No text available") for match in context_vectors["matches"]]
+
     print("Context:", context)
-    
-    # Generate response using Gemini
-    response = get_gemini_response(query_text, context, session_id)
+
+    # Generate response using Gemini with document_id
+    response = get_gemini_response(query_text, context, session_id, document_id)
 
     return jsonify({"response": response}), 200
 
