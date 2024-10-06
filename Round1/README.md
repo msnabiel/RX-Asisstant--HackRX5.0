@@ -13,11 +13,11 @@ http://localhost:3000/chat
 ```
 
 ## Data Flow
-![Diagram](./detailed_data_flow_diagram.png)
+![Diagram](../References/detailed_data_flow_diagram.png)
 
 ## Snapshots
 
-![Diagram](./image_1.jpeg)
+![Diagram](../References//image_1.jpeg)
 
 
 
