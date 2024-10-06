@@ -1,0 +1,11 @@
+tqdm
+pdfplumber
+python-pptx
+Pillow
+pytesseract
+chromadb
+sentence-transformers
+Flask
+requests
+google-generativeai
+chromadb
