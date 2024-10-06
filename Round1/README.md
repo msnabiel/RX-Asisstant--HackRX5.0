@@ -62,7 +62,7 @@ python load_documents.py
 After loading the documents, start the Flask application:
 
 ```bash
-python index.py
+python round1.py
 ```
 
 ### API Endpoint
