@@ -12,8 +12,12 @@ import pytesseract
 import platform
 from flask_cors import CORS
 from transformers import T5ForConditionalGeneration, T5Tokenizer
-import pinecone  # Import Pinecone for document storage
 import warnings
+from pinecone import Pinecone
+import os 
+from pinecone import ServerlessSpec
+import time
+from tqdm.auto import tqdm
 
 # Suppress specific warnings from Hugging Face transformers library
 warnings.filterwarnings("ignore", message="You are using the default legacy behaviour")
@@ -48,12 +52,38 @@ session_history: Dict[str, List[Dict[str, str]]] = {}
 # Load Huggingface model for embeddings
 embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-# Initialize Pinecone
-pinecone.init(api_key='YOUR_PINECONE_API_KEY', environment='us-west1-gcp')  # Use your actual Pinecone API key and environment
-index_name = "your_index_name"  # Define your index name here
-if index_name not in pinecone.list_indexes():
-    pinecone.create_index(index_name, dimension=embedding_model.get_sentence_embedding_dimension())  # Create index with correct dimension
-index = pinecone.Index(index_name)
+
+api_key = "7968bf7e-97f5-4022-adf7-9294590606be"
+
+# configure client
+pc = Pinecone(api_key=api_key)
+cloud = os.environ.get('PINECONE_CLOUD') or 'aws'
+region = os.environ.get('PINECONE_REGION') or 'us-east-1'
+spec = ServerlessSpec(cloud=cloud, region=region)
+index_name = 'msnabiel'
+existing_indexes = [
+    index_info["name"] for index_info in pc.list_indexes()
+]
+
+# check if index already exists (it shouldn't if this is first time)
+if index_name not in existing_indexes:
+    # if does not exist, create index
+    pc.create_index(
+        index_name,
+        dimension=384,  # dimensionality of minilm
+        metric='cosine', #metric='dotproduct',
+        spec=spec
+    )
+    # wait for index to be initialized
+    while not pc.describe_index(index_name).status['ready']:
+        time.sleep(1)
+
+# connect to index
+index = pc.Index(index_name)
+time.sleep(1)
+# view index stats
+index.describe_index_stats()
+
 
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-1.5-flash")
@@ -102,7 +132,7 @@ def fetch_and_call_api(query):
         response = requests.get("https://dummyapi.com/api", params={"query": query})
         response_data = response.json()
     except Exception as e:
-        return "Need API Key to call, to perform the action."
+        return "Need API Key to call, to perform the action. "
 
     if response and response_data.get("status") == "success":
         return response_data["message"]
@@ -138,12 +168,12 @@ def classify_query_with_flan(query: str, actions_list: list = DEFAULT_ACTIONS_LI
     
     Query: {query}
     """
-    
+    print("Query for FlanT5:", query)
     # Tokenize the input
     inputs = flan_tokenizer(prompt, return_tensors="pt")
     outputs = flan_model.generate(**inputs, max_length=10, num_return_sequences=1)
     response = flan_tokenizer.decode(outputs[0], skip_special_tokens=True).lower()
-    print(response)
+    print("Response from FlanT5:", response)
     
     # Check if the response matches one of the actions
     for action in actions_list:
@@ -160,7 +190,10 @@ def build_combined_prompt(query: str, context: List[str], history: List[Dict[str
     user_prompt = f"The question is '{query}'. Here is all the context you have: {' '.join(context)}"
     history_prompt = "\n".join([f"User: {item['query']}\nBot: {item['response']}" for item in history])
 
+    print("Combined Prompt:", f"{base_prompt} {history_prompt} {user_prompt}")
+
     return f"{base_prompt} {history_prompt} {user_prompt}"
+
 
 def get_gemini_response(query: str, context: List[str], session_id: str) -> str:
     history = session_history.get(session_id, [])
@@ -223,7 +256,8 @@ def upload_document():
         for i, line in enumerate(lines):
             if line.strip():  # Only process non-empty lines
                 vector = embedding_model.encode(line).tolist()  # Create embedding vector
-                vectors.append((f"{doc_name}_{i}", vector))  # Create ID and vector pair
+                # Create ID and metadata pair for upserting
+                vectors.append((f"{doc_name}_{i}", vector, {"line": line}))  # Include metadata as a dictionary
 
         # Upsert all vectors to Pinecone
         index.upsert(vectors=vectors)
@@ -248,10 +282,11 @@ def query():
 
     # Retrieve the Pinecone vectors to provide context
     query_vector = embedding_model.encode(query_text).tolist()
-    context_vectors = index.query(query_vector, top_k=5, include_metadata=True)
+    context_vectors = index.query(vector=query_vector, top_k=5, include_metadata=True)
 
     # Extract context from the Pinecone query results
-    context = [match["metadata"]["text"] for match in context_vectors["matches"]]
+    context = [match["metadata"].get("line", "No text available") for match in context_vectors["matches"]]
+    print("Context:", context)
     
     # Generate response using Gemini
     response = get_gemini_response(query_text, context, session_id)
