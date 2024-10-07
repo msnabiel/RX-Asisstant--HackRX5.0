@@ -1,0 +1,13 @@
+Flask
+flask-cors
+requests
+google-generativeai
+chromadb
+sentence-transformers
+pdfplumber
+python-pptx
+Pillow
+pytesseract
+tqdm
+transformers
+sentencepiece
