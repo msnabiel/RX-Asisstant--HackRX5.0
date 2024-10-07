@@ -1,14 +1,12 @@
 import argparse
 import os
 from typing import List, Dict
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify
 import requests
 import google.generativeai as genai
 import chromadb
 from chromadb.utils import embedding_functions
 from sentence_transformers import SentenceTransformer
-import os
-import argparse
 from tqdm import tqdm
 import pdfplumber
 from pptx import Presentation
@@ -17,20 +15,17 @@ import pytesseract
 import platform
 from flask_cors import CORS 
 from transformers import T5ForConditionalGeneration, T5Tokenizer
-from transformers import T5ForConditionalGeneration, T5Tokenizer
 import warnings
 
 # Suppress specific warnings from Hugging Face transformers library
 warnings.filterwarnings("ignore", message="You are using the default legacy behaviour")
 warnings.filterwarnings("ignore", message="It will be set to `False` by default.")
 warnings.filterwarnings("ignore", message="`clean_up_tokenization_spaces` was not set")
+
 # Set Google API key for Gemini
 def set_google_api_key():
     api_key = "AIzaSyD7VrRJrSa3W7u0syiZpWldChRCTiWLp-4"
-    if platform.system() == "Windows":
-        os.environ["GOOGLE_API_KEY"] = api_key
-    else:  # Assuming macOS or Linux
-        os.environ["GOOGLE_API_KEY"] = api_key
+    os.environ["GOOGLE_API_KEY"] = api_key
 
 set_google_api_key()
 
@@ -38,13 +33,23 @@ set_google_api_key()
 app = Flask(__name__)
 CORS(app)
 collection = None
+
 # Now you can retrieve the API key from the environment variable when needed
 google_api_key = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=google_api_key)
 
+UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
+if not os.path.exists(UPLOAD_FOLDER):
+    print("Creating folder...")
+    os.makedirs(UPLOAD_FOLDER)
+else:
+    print("Folder already exists.")
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 # Load the Flan-T5 model and tokenizer from Hugging Face
-flan_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base", legacy=False)
-flan_model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-base")
+flan_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-large", legacy=False)
+flan_model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-large")
 
 # Initialize history storage
 session_history: Dict[str, List[Dict[str, str]]] = {}
@@ -54,7 +59,6 @@ embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-1.5-flash")
-
 
 # Helper functions to extract text from different document types
 def extract_text_from_pdf(pdf_path):
@@ -156,6 +160,7 @@ def build_combined_prompt(query: str, context: List[str], history: List[Dict[str
         """
     user_prompt = f"The question is '{query}'. Here is all the context you have: {' '.join(context)}"
     history_prompt = "\n".join([f"User: {item['query']}\nBot: {item['response']}" for item in history])
+    #print("Combined Prompt:", f"{base_prompt} {history_prompt} {user_prompt}")
 
     return f"{base_prompt} {history_prompt} {user_prompt}"
 
@@ -174,6 +179,7 @@ def get_gemini_response(query: str, context: List[str], session_id: str) -> str:
 
     # Build the combined prompt
     prompt = build_combined_prompt(query, context, history)
+    print("SENT PROMPT TO GEMINI :", prompt)
 
     # Get response from Gemini
     response = model.generate_content(prompt)
@@ -188,7 +194,6 @@ def get_gemini_response(query: str, context: List[str], session_id: str) -> str:
 
 @app.route('/upload_document', methods=['POST'])
 def upload_document():
-    collection = g.collection
     if 'document' not in request.files:
         return jsonify({"error": "No document uploaded."}), 400
 
@@ -207,11 +212,7 @@ def upload_document():
         # Extract text from the uploaded document
         text = extract_text_from_file(upload_path)
         if text is None:
-            #app.logger.error(f"Failed to extract text from {doc_name}.")
-            return jsonify({"error": "Unsupported document format or failed to extract text from {doc_name}."}), 400
-
-        #if text is None:
-        #    return jsonify({"error": "Unsupported document format or failed to extract text."}), 400
+            return jsonify({"error": f"Unsupported document format or failed to extract text from {doc_name}."}), 400
 
         # Generate a unique document ID
         document_id = "doc_" + os.urandom(6).hex()
@@ -221,7 +222,8 @@ def upload_document():
 
         # Store extracted text into ChromaDB with metadata
         documents = [line for line in lines if line.strip()]
-        metadatas = [{"filename": doc_name, "line_number": i} for i, _ in enumerate(documents, 1)]
+        #metadatas = [{"filename": doc_name, "line_number": i} for i, _ in enumerate(documents, 1)]
+        metadatas = [{"document_id": document_id, "filename": doc_name, "line_number": i} for i, _ in enumerate(documents, 1)]
 
         # Add documents to Chroma collection
         collection.add(
@@ -230,20 +232,13 @@ def upload_document():
             metadatas=metadatas
         )
 
-        return jsonify({"document_id": document_id, "message": "Document uploaded and processed successfully."}), 200
+        return jsonify({"message": "Document uploaded and processed successfully.", "document_id": document_id}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Failed to process document: {str(e)}"}), 500
-
-    finally:
-        # Clean up by removing the uploaded file after processing
-        if os.path.exists(upload_path):
-            os.remove(upload_path)
-
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    collection = g.collection
     data = request.json
     user_id = request.headers.get('x-user-id')
     session_id = request.headers.get('x-session-id')
@@ -275,11 +270,16 @@ def chat():
             return jsonify({"error": "No relevant information found in the database."}), 404
 
         # Extract the relevant context and metadata (line number and document name)
-        context = [doc for sublist in context_results["documents"] for doc in sublist]
-        metadata = [meta for sublist in context_results["metadatas"] for meta in sublist]
+        # Flattening documents and metadata
+        context = [doc for docs in context_results["documents"] for doc in docs]  # Flatten documents
+        metadata = [meta for metas in context_results["metadatas"] for meta in metas]  # Flatten metadata
+
+        # Check if context is a flat list of strings
+        if not all(isinstance(c, str) for c in context):
+            return jsonify({"error": "Context is not in the expected format."}), 500
 
         # Get response from Gemini model
-        response = get_gemini_response(query, context, session_id)
+        response = get_gemini_response(query, context, session_id) + "\n\n"
 
         # Prepare the reference excerpts and metadata (line number and document name)
         references = []
@@ -299,25 +299,29 @@ def chat():
         return jsonify(response_data), 200
 
     except Exception as e:
-        return jsonify({"error": "An internal error occurred. Please try again later."}), 500
+        return jsonify({"error": f"An internal error occurred: {str(e)}"}), 500
+
 
 def main(collection_name: str = "documents_collection", persist_directory: str = ".") -> None:
-    global collection  # Declare the collection variable to access it in the chat function
+    global collection  # Declare the global variable first
+
     client = chromadb.PersistentClient(path=persist_directory)
 
     # Create embedding function using Huggingface transformers
     embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        api_key="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"  # Ensure you set this environment variable
+        api_key="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"
     )
-    
-    # Get the collection
-    #collection = client.get_collection(name=collection_name, embedding_function=embedding_function)
-    g.collection = client.get_collection(name=collection_name, embedding_function=embedding_function)
 
-    # Start Flask app
+    try:
+        collection = client.get_collection(name=collection_name, embedding_function=embedding_function)
+        print(f"Loaded existing collection: {collection_name}")
+    except Exception as e:
+        print(f"Collection '{collection_name}' not found. Creating a new collection.")
+        collection = client.create_collection(name=collection_name, embedding_function=embedding_function)
+
+    # Start the Flask app
     app.run(port=3000)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load documents into a Chroma collection")
