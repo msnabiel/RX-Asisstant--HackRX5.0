@@ -115,42 +115,44 @@ def execute_action(action_name: str, query: str) -> str:
     """
     Executes the specified action based on the provided action name and query.
     """
-    # Extract key points (e.g., order ID, payment ID, invoice ID) from the query using Gemini
     key_points_json = extract_key_action_with_gemini(query)
     extracted_data = json.loads(key_points_json)
+    print("Extracted data:", extracted_data)
 
-    # Extract identifiers if available
+    # Filter out null values
     order_id = extracted_data.get("order_id")
     payment_id = extracted_data.get("payment_id")
     invoice_id = extracted_data.get("invoice_id")
+    print("Order ID:", order_id, "Payment ID:", payment_id, "Invoice ID:", invoice_id)
+    # Check for missing identifiers and prompt the user
+    missing_info = []
+    
+    if action_name == "create_order" and order_id is None:
+        missing_info.append("Order ID")
+    if action_name == "cancel_order" and order_id is None:
+        missing_info.append("Order ID")
+    if action_name == "collect_payment" and payment_id is None:
+        missing_info.append("Payment ID")
+    if action_name == "view_invoice" and invoice_id is None:
+        missing_info.append("Invoice ID")
+    print(missing_info)
+    if missing_info:
+        return f"Please provide the following information: {', '.join(missing_info)}."
 
+    # Proceed with the action if all required identifiers are present
     confirmation_message = ""
-
     if action_name == "create_order":
-        # Simulate order creation
         return "Order created successfully."
-
     elif action_name == "cancel_order":
-        if not order_id:
-            return "Order ID is required to cancel the order."
         confirmation_message = f"Are you sure you want to cancel your order with ID {order_id}?"
-
     elif action_name == "collect_payment":
-        if not payment_id:
-            return "Payment ID is required to collect the payment."
         confirmation_message = f"Are you sure you want to collect the payment with ID {payment_id}?"
-
     elif action_name == "view_invoice":
-        if not invoice_id:
-            return "Invoice ID is required to view the invoice."
         return f"Here is your invoice with ID {invoice_id}."
-
     else:
         return "No action taken."
 
-    # If confirmation message is generated, return it
     return confirmation_message
-
 
 def confirm_action(action_name: str, identifier: str) -> str:
     """
@@ -229,7 +231,7 @@ def classify_action_with_gemini(query: str) -> str:
 
 def extract_key_action_with_gemini(query: str) -> str:
     """
-    Use Gemini to classify the query into an action or a context-based query.
+    Use Gemini to extract key information from the query.
     """
     prompt = f"""
     You are a helpful assistant. Extract key information from the below statement, like order id, amount and return in json format. 
@@ -240,8 +242,25 @@ def extract_key_action_with_gemini(query: str) -> str:
     # Send the prompt to Gemini for classification
     response = model.generate_content(prompt)
     classification = response.text.strip().lower()
-    print("Gemini Key information :", classification)
-    return classification
+    #print("Gemini Key information before cleaning:", classification)
+    classification = classification.replace("json", "").strip() # Remove "json" from the string and strip leading/trailing whitespace
+    while classification.startswith('"') or classification.startswith("'") or classification.startswith("`"):
+        classification = classification[1:]  # Remove the first character if it's a quote
+    while classification.endswith('"') or classification.endswith("'") or classification.endswith("`"):
+        classification = classification[:-1]  # Remove the last character if it's a quote
+
+    # Remove backticks from the string
+    classification = classification.replace("`", "")
+    print("Gemini Key information after cleaning:", classification)
+     # Convert string to dictionary to ensure valid JSON and remove any null values
+    try:
+        extracted_data = json.loads(classification)
+        filtered_data = {k: v for k, v in extracted_data.items() if v is not None}
+        return json.dumps(filtered_data)  # Return as JSON without null values
+    except json.JSONDecodeError:
+        print("JSON contains null values")
+        return "{}"
+    #return classification
 
 def get_gemini_response(query: str, context: List[str], session_id: str, extract_data: bool = False) -> str:
     history = session_history.get(session_id, [])
@@ -252,12 +271,6 @@ def get_gemini_response(query: str, context: List[str], session_id: str, extract
     if action != "context_based":
         # If action is identified, extract necessary details
         action_response = execute_action(action, query)
-
-        # If response indicates missing information, ask user for it
-        if "required" in action_response:
-            # Ask for missing identifiers from the user
-            missing_param = action_response.split()[0]  # "Order ID" or "Payment ID"
-            return False, f"Please provide your {missing_param.lower()}."
         
         # Append the action execution to session history
         session_history.setdefault(session_id, []).append({"query": query, "response": action_response})
