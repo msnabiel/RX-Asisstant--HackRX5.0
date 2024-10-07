@@ -111,7 +111,7 @@ def fetch_and_call_api(query):
     if response and response_data.get("status") == "success":
         return response_data["message"]
 
-def execute_action(action_name: str, query: str) -> str:
+def execute_action(action_name: str, query: str, session_id: str) -> str:
     """
     Executes the specified action based on the provided action name and query.
     """
@@ -142,11 +142,17 @@ def execute_action(action_name: str, query: str) -> str:
     # Proceed with the action if all required identifiers are present
     confirmation_message = ""
     if action_name == "create_order":
-        return "Order created successfully."
+        confirmation_message = f"Are you sure you want to create an order with ID {order_id}?"
+        conversation_state[session_id]["pending_action"] = "create_order"
+        conversation_state[session_id]["order_id"] = order_id
     elif action_name == "cancel_order":
         confirmation_message = f"Are you sure you want to cancel your order with ID {order_id}?"
+        conversation_state[session_id]["pending_action"] = "cancel_order"
+        conversation_state[session_id]["order_id"] = order_id
     elif action_name == "collect_payment":
         confirmation_message = f"Are you sure you want to collect the payment with ID {payment_id}?"
+        conversation_state[session_id]["pending_action"] = "collect_payment"
+        conversation_state[session_id]["payment_id"] = payment_id
     elif action_name == "view_invoice":
         return f"Here is your invoice with ID {invoice_id}."
     else:
@@ -270,7 +276,7 @@ def get_gemini_response(query: str, context: List[str], session_id: str, extract
     action = action.lower()
     if action != "context_based":
         # If action is identified, extract necessary details
-        action_response = execute_action(action, query)
+        action_response = execute_action(action, query,session_id)
         
         # Append the action execution to session history
         session_history.setdefault(session_id, []).append({"query": query, "response": action_response})
@@ -349,6 +355,36 @@ def chat():
         return jsonify({"error": "Query is required."}), 400
 
     try:
+        if session_id in conversation_state and "pending_action" in conversation_state[session_id]:
+            pending_action = conversation_state[session_id]["pending_action"]
+            order_id = conversation_state[session_id].get("order_id")
+            payment_id = conversation_state[session_id].get("payment_id")
+            invoice_id = conversation_state[session_id].get("invoice_id")
+
+            if query.lower() in ["yes", "confirm"]:
+                if pending_action == "cancel_order":
+                    response = confirm_action(pending_action, order_id)
+                    # Clear pending action after confirming
+                    del conversation_state[session_id]
+                    return jsonify({"bot_message": response}), 200
+                elif pending_action == "collect_payment":
+                    response = confirm_action(pending_action, payment_id)
+                    # Clear pending action after confirming
+                    del conversation_state[session_id]
+                    return jsonify({"bot_message": response}), 200
+                elif pending_action == "create_order":
+                    response = confirm_action(pending_action,order_id)
+                    # Clear pending action after confirming
+                    del conversation_state[session_id]
+                    return jsonify({"bot_message": response}), 200
+                # Handle other actions as needed
+
+            elif query.lower() in ["no", "cancel"]:
+                response = "Action cancelled."
+                # Clear pending action
+                del conversation_state[session_id]
+                return jsonify({"bot_message": response}), 200
+
         if document_id:
             # Fetch context only from the specified document
             context_results = collection.query(
