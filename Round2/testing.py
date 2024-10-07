@@ -18,6 +18,12 @@ from transformers import T5ForConditionalGeneration, T5Tokenizer
 import warnings
 import json
 from collections import defaultdict
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+import re
+
+# Initialize conversation state
 conversation_state = defaultdict(dict)
 
 # Suppress specific warnings from Hugging Face transformers library
@@ -64,29 +70,60 @@ embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Helper functions to extract text from different document types
+
+
 def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF file."""
+    """Extract text from a PDF file with layout preservation and OCR fallback for scanned PDFs."""
     text = ""
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            text += page.extract_text() + "\n"
-    return text
+            page_text = page.extract_text(layout=True)  # Preserve layout
+            if page_text:  
+                text += page_text + "\n"
+            else:  # If text extraction fails, use OCR on the image version of the page
+                images = convert_from_path(pdf_path)
+                for image in images:
+                    ocr_text = pytesseract.image_to_string(image)
+                    text += ocr_text + "\n"
+    return clean_text(text)
 
 def extract_text_from_ppt(ppt_path):
-    """Extract text from a PPT file."""
+    """Extract text from a PPT file, including text in grouped shapes and tables."""
     prs = Presentation(ppt_path)
     text = ""
     for slide in prs.slides:
         for shape in slide.shapes:
             if hasattr(shape, "text"):
                 text += shape.text + "\n"
-    return text
+            # Extract text from tables
+            if shape.has_table:
+                for row in shape.table.rows:
+                    row_text = " ".join([cell.text for cell in row.cells])
+                    text += row_text + "\n"
+            # Check for grouped shapes
+            if hasattr(shape, "shapes"):
+                for sub_shape in shape.shapes:
+                    if hasattr(sub_shape, "text"):
+                        text += sub_shape.text + "\n"
+    return clean_text(text)
+
+
+
+def preprocess_image(image):
+    """Preprocess the image for better OCR accuracy: grayscale, contrast, and resize."""
+    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    # Resize to improve OCR accuracy if image is too small
+    resized = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    # Increase contrast
+    contrast = cv2.convertScaleAbs(resized, alpha=2.0, beta=0)
+    return contrast
 
 def extract_text_from_image(image_path):
-    """Extract text from an image using OCR."""
+    """Extract text from an image using OCR with preprocessing."""
     image = Image.open(image_path)
-    text = pytesseract.image_to_string(image)
-    return text
+    preprocessed_image = preprocess_image(image)  # Apply preprocessing for better accuracy
+    text = pytesseract.image_to_string(preprocessed_image, config='--psm 6')  # Use custom OCR config for block text
+    return clean_text(text)
 
 def extract_text_from_file(file_path):
     """Extract text based on the file type."""
@@ -99,6 +136,13 @@ def extract_text_from_file(file_path):
         return extract_text_from_image(file_path)
     else:
         return None
+def clean_text(text):
+    """Remove unnecessary empty lines and extra spaces from extracted text."""
+    # Remove leading/trailing spaces and collapse multiple spaces into one
+    cleaned_text = re.sub(r'\s+', ' ', text.strip())
+    # Remove multiple empty lines and keep only one
+    cleaned_text = re.sub(r'\n\s*\n', '\n', cleaned_text)
+    return cleaned_text
 
 def fetch_and_call_api(query):
     response_data = {}
