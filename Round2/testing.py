@@ -166,6 +166,9 @@ def confirm_action(action_name: str, identifier: str) -> str:
     """
     if action_name == "cancel_order":
         return f"Your order with ID {identifier} has been cancelled."
+    
+    elif action_name == "create_order":
+        return f"Order with ID {identifier} has been created successfully."
 
     elif action_name == "collect_payment":
         return f"Payment with ID {identifier} has been collected successfully."
