@@ -1,5 +1,3 @@
-argparse
-os
 Flask
 requests
 google-generativeai
@@ -10,13 +8,8 @@ pdfplumber
 python-pptx
 Pillow
 pytesseract
-platform
 flask-cors
 transformers
-warnings
-json
-collections
 opencv-python
 numpy
 pdf2image
-re
