@@ -1,0 +1,15 @@
+Flask
+requests
+google-generativeai
+chromadb
+sentence-transformers
+tqdm
+pdfplumber
+python-pptx
+Pillow
+pytesseract
+flask-cors
+transformers
+opencv-python
+numpy
+pdf2image
