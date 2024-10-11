@@ -13,3 +13,4 @@ transformers
 opencv-python
 numpy
 pdf2image
+gunicorn
