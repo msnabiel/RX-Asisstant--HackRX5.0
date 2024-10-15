@@ -12,7 +12,7 @@ This repository contains a powerful assistant built using Flask and various mach
 - [Author Information](#author-information)
 
 ## Demonstration
-[Watch the Video](https://github.com/msnabiel/RX-Assistant/raw/main/References/recording.mov)
+[Watch the Video](https://github.com/msnabiel/RX-Asisstant/raw/main/References/recording.mov)
 
 ## Features
 - Extracts key information from various document types using Optical Character Recognition (OCR).
