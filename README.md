@@ -1,86 +1,93 @@
-# RX-Assistant
+# RX-Asisstant-PS4-GPTeam
 
-RX-Assistant is a chatbot application that can process and respond to user queries based on the documents stored in your directory. It utilizes ChromaDB for document storage and retrieval, Google Generative AI for generating responses, and Hugging Face for embeddings.
+This repository contains a powerful assistant built using Flask and various machine learning models to extract key information from user queries and documents. It supports various document formats such as PDF, PPT, DOCX, and images, allowing users to upload and extract relevant information dynamically.
 
-## Hackathon Submission
-
-This project is a submission for [HackRX](https://hackrx.in/) for the problem statement **Context Aware Chatbot**.
-
-## Endpoint URL
-
-```bash
-http://localhost:3000/chat
-```
-
+## Table of Contents
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [API Endpoints](#api-endpoints)
+- [Contributing](#contributing)
+- [License](#license)
+- [Author Information](#author-information)
+## Screenshot
+![Diagram](../References/ss.png)
 ## Data Flow
-![Diagram](References/detailed_data_flow_diagram.png)
+![Diagram](../References/detailed_data_flow_diagram.png)
+## Demonstration
+[Watch the Video Demo](https://github.com/msnabiel/RX-Asisstant/raw/main/References/recording.mov)
 
-## Snapshots
+## Features
+- Extracts key information from various document types using Optical Character Recognition (OCR).
+- Supports multiple actions such as creating orders, checking eligibility, generating leads, and more.
+- Implements a conversational interface that keeps track of user sessions and pending actions.
+- Uses the Gemini and Flan-T5 models for understanding and processing queries.
 
-![Diagram](References/image_1.jpeg)
+## Installation
 
-
-
-## Getting Started
-
-### Prerequisites
-
-Make sure you have the following installed:
-
-- Python 3.x
-- Pip (Python package installer)
-
-### Installation
-
-1. Clone the repository:
-
+1. **Clone the repository:**
    ```bash
-   git clone https://github.com/msnabiel/RX-Assistant.git
-   cd RX-Assistant
+   git clone https://github.com/msnabiel/RX-Asisstant.git
+   cd Round2
    ```
 
-2. Install the required packages:
+2. **Create a virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   ```
 
+3. **Install the required packages:**
    ```bash
    pip install -r requirements.txt
    ```
 
-### Setting Up Documents
+4. **Set your Google API key:**
+   ```bash
+   export GOOGLE_API_KEY='YOUR_API_KEY'
+   ```
 
-1. Place your documents (PDFs, PPTs, images, and text files) in the `documents` folder.
+## Usage
+To run the application, follow these steps:
 
-### Loading Documents
+1. Start the Flask application:
+   ```bash
+   python backend.py
+   ```
 
-Run the load_documents.py file or run the following command to load the documents into ChromaDB:
+   The application will start on `http://localhost:3000`.
 
-```bash
-python load_documents.py
-```
+2. Run the Chainlit interface:
+   ```bash
+   chainlit run frontend.py
+   ```
 
-### Running the Application
+   You can now chat with the assistant through the Chainlit interface.
 
-After loading the documents, start the Flask application:
+## API Endpoints
 
-```bash
-python index.py
-```
+### Upload Document
+- **POST** `/upload_document`
+- **Description**: Uploads a document and extracts text.
+- **Parameters**: 
+  - `document`: The document file to upload (supports PDF, PPT, DOCX, images, etc.).
 
-### API Endpoint
+### Chat
+- **POST** `/chat`
+- **Description**: Sends a query to the assistant and receives a response.
+- **Headers**:
+  - `x-user-id`: Unique identifier for the user.
+  - `x-session-id`: Unique identifier for the user session.
+- **Parameters**: 
+  - `query`: The user's query as a string.
+  - `document_id`: Optional document ID to use for context.
 
-The chat functionality can be accessed via the `/chat` endpoint. You can send a POST request to this endpoint with a JSON payload containing the user's query.
+## Contributing
+If you would like to contribute to this project, please fork the repository and submit a pull request. Contributions are welcome!
 
-### Example cURL Command
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-You can test the API using cURL:
-
-```bash
-curl --location "localhost:3000/chat" --header "Content-Type: application/json" --header "x-user-id: 1234" --header "x-session-id: J5S7P1ZQ" --data "{\"query\":\"What is said about the pandemic?\"}"
-```
-
-### Response
-
-```json
-{
- {"bot_message":"The pandemic has been punishing. \n"}
-}
-```
+## Author Information
+- **Author**: [msnabiel](https://github.com/msnabiel)
+- **Email**: [msyednabiel@gmail.com](mailto:msyednabiel@gmail.com)
