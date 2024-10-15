@@ -28,7 +28,7 @@ This repository contains a powerful assistant built using Flask and various mach
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/msnabiel/RX-Asisstant.git
-   cd PS4-GPTeam
+   cd Round2
    ```
 
 2. **Create a virtual environment:**
