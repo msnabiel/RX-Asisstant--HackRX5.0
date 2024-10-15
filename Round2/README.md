@@ -22,6 +22,7 @@ This repository contains a powerful assistant built using Flask and various mach
 - Supports multiple actions such as creating orders, checking eligibility, generating leads, and more.
 - Implements a conversational interface that keeps track of user sessions and pending actions.
 - Uses the Gemini and Flan-T5 models for understanding and processing queries.
+- Multiple languages support, from french to japanese, using deep-translator module.
 
 ## Installation
 
