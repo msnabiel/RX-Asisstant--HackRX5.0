@@ -10,7 +10,10 @@ This repository contains a powerful assistant built using Flask and various mach
 - [Contributing](#contributing)
 - [License](#license)
 - [Author Information](#author-information)
-
+## Screenshot
+![Diagram](../References/ss.png)
+## Data Flow
+![Diagram](../References/detailed_data_flow_diagram.png)
 ## Demonstration
 [Watch the Video Demo](https://github.com/msnabiel/RX-Asisstant/raw/main/References/recording.mov)
 
