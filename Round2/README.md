@@ -1,4 +1,4 @@
-# PS4-GPTeam
+# PS4-GPTeam-RX-Asisstant
 
 This repository contains a powerful assistant built using Flask and various machine learning models to extract key information from user queries and documents. It supports various document formats such as PDF, PPT, DOCX, and images, allowing users to upload and extract relevant information dynamically.
 
@@ -11,6 +11,9 @@ This repository contains a powerful assistant built using Flask and various mach
 - [License](#license)
 - [Author Information](#author-information)
 
+## Demonstration
+[![Watch the video](https://img.youtube.com/vi/VIDEO_ID/0.jpg)](https://github.com/msnabiel/RX-Assistant/blob/main/References/recording.mov)
+
 ## Features
 - Extracts key information from various document types using Optical Character Recognition (OCR).
 - Supports multiple actions such as creating orders, checking eligibility, generating leads, and more.
@@ -21,7 +24,7 @@ This repository contains a powerful assistant built using Flask and various mach
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/HackRx50/PS4-GPTeam.git
+   git clone https://github.com/msnabiel/RX-Asisstant.git
    cd PS4-GPTeam
    ```
 
@@ -46,7 +49,7 @@ To run the application, follow these steps:
 
 1. Start the Flask application:
    ```bash
-   python app.py
+   python backend.py
    ```
 
    The application will start on `http://localhost:3000`.
