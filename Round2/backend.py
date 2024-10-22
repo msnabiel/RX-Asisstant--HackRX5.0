@@ -36,10 +36,12 @@ warnings.filterwarnings("ignore", message="`clean_up_tokenization_spaces` was no
 
 # Set Google API key for Gemini
 def set_google_api_key():
-    api_key = "AIzaSyD7VrRJrSa3W7u0syiZpWldChRCTiWLp-4"
+    api_key = "YOUR_GOOGLE_API_KEY"
     os.environ["GOOGLE_API_KEY"] = api_key
 
 set_google_api_key()
+
+HUGGING_FACE_KEY =  "YOUR_HUGGING FACE KEY"
 
 # Define the default actions list outside the function
 DEFAULT_ACTIONS_LIST = ["create_order", "cancel_order", "collect_payment", "view_invoice"]
@@ -78,6 +80,11 @@ embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-1.5-flash")
+
+# Common headers
+headers = {
+    "x-team": "GPTeam"
+}
 
 # Helper functions to extract text from different document types
 
@@ -251,8 +258,7 @@ def search_json_for_keys(data, keys):
     
     return found
 
-import json
-import random
+
 
 
 def execute_action(action_name: str, query: str, session_id: str, document_id: str = None) -> str:
@@ -594,8 +600,7 @@ def confirm_action(action_name: str, identifier: str, mobile: str = None, produc
     # If the action name does not match any known category
     return "No action taken."
 
-# Define the default actions list outside the function
-DEFAULT_ACTIONS_LIST = ["create_order", "cancel_order", "collect_payment", "view_invoice"]
+
 
 def classify_query_with_flan(query: str, actions_list: list = DEFAULT_ACTIONS_LIST) -> str:
     """Use Flan-T5 to classify the query as action-based or context-based using a dynamic list of actions."""
@@ -640,10 +645,7 @@ Your response must be informative, concise and short provide as much relevant de
     print("COMBINED PROMPT : ", f"{base_prompt} \n HISTORY: {history_prompt} \n USER PROMPT: {user_prompt}")
     return f"{base_prompt} {history_prompt} {user_prompt}"
 
-# Common headers
-headers = {
-    "x-team": "GPTeam"
-}
+
 
 # 1. Generate Lead
 def generate_lead(mobile):
@@ -1025,7 +1027,7 @@ def main(collection_name: str = "documents_collection", persist_directory: str =
     # Create embedding function using Huggingface transformers
     embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        api_key="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"
+        api_key=HUGGING_FACE_KEY
     )
 
     try:
